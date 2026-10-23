@@ -1,0 +1,6 @@
+dist
+node_modules
+public/balcao.js
+package-lock.json
+n8n/balcao-workflow.json
+data

@@ -1,0 +1,15 @@
+[
+  {
+    "slug": "minha-oficina",
+    "name": "Minha Oficina",
+    "segment": "Oficina mecânica",
+    "publicKey": "pk_minhaoficina_7f3a",
+    "allowedOrigins": ["https://minhaoficina.com.br"],
+    "responseHours": 24,
+    "notify": { "telegramChatId": "123456789" },
+    "services": [
+      { "id": "revisao", "name": "Revisão", "keywords": ["revisao", "oleo", "filtro"] },
+      { "id": "freio", "name": "Freios", "keywords": ["freio", "pastilha", "disco"] }
+    ]
+  }
+]

@@ -1,0 +1,30 @@
+{
+  "name": "balcao",
+  "version": "1.0.0",
+  "description": "Recebe os pedidos de orçamento dos sites de pequenos negócios, classifica, avisa o dono pelo n8n e cobra quem não respondeu.",
+  "license": "MIT",
+  "author": "Henrique Ribeiro Leonardo",
+  "type": "module",
+  "engines": {
+    "node": ">=22.5"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.build.json && npm run build:web",
+    "build:web": "node scripts/build-web.mjs",
+    "build:workflow": "node scripts/build-workflow.mjs",
+    "start": "node --disable-warning=ExperimentalWarning dist/server.js",
+    "test": "node --disable-warning=ExperimentalWarning --import tsx --test \"test/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "npm run format:check && npm run typecheck && npm test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "esbuild": "^0.25.0",
+    "prettier": "^3.4.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

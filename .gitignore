@@ -1,0 +1,7 @@
+node_modules
+dist
+data
+public/balcao.js
+.env
+*.log
+.DS_Store

@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Balcão · triagem de pedidos de orçamento com API REST e agente no n8n</title>
+    <meta
+      name="description"
+      content="Projeto de Henrique Ribeiro Leonardo: API REST em TypeScript e agente no n8n que recebem, classificam e acompanham pedidos de orçamento de pequenos negócios."
+    />
+    <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=Source+Sans+3:wght@400;500;600&family=JetBrains+Mono&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <a class="skip" href="#demonstracao">Pular para a demonstração</a>
+
+    <header class="paper-head">
+      <div class="col">
+        <h1>Balcão: triagem automática de pedidos de orçamento para pequenos negócios com API REST e agente no n8n</h1>
+        <p class="author">Henrique Ribeiro Leonardo</p>
+        <p class="affiliation">Bacharelado em Sistemas de Informação · outubro de 2026</p>
+        <nav class="links" aria-label="Materiais">
+          <a href="https://github.com/henriqueribeiroleonardo1/balcao">Código-fonte</a>
+          <a href="https://github.com/henriqueribeiroleonardo1/balcao/tree/main/n8n">Fluxo do n8n</a>
+          <a href="#demonstracao">Demonstração</a>
+          <a href="painel.html">Painel</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="col abstract" aria-labelledby="resumo">
+        <h2 id="resumo">Resumo</h2>
+        <p>
+          Pequenos negócios que vendem por orçamento perdem clientes quando o pedido feito pelo site demora a ser
+          respondido. Este projeto propõe o Balcão, um serviço que fica entre o formulário do site e o dono do negócio.
+          Uma API REST em TypeScript valida e classifica cada pedido por regras explicáveis (serviço, urgência, volume e
+          aderência ao negócio) e o entrega, assinado com HMAC, a um fluxo no n8n. Nesse fluxo, um agente de IA consulta
+          o histórico do cliente pela própria API, define a prioridade e redige a primeira resposta, que chega ao dono
+          pelo Telegram. Pedidos sem resposta no prazo do negócio são cobrados duas vezes ao dia. A implementação não
+          tem dependências de produção e é verificada por 66 testes automatizados.
+        </p>
+        <p class="keywords"><b>Palavras-chave:</b> API REST; automação; n8n; agentes de IA; pequenos negócios.</p>
+      </section>
+
+      <section class="col" aria-labelledby="s1">
+        <h2 id="s1"><span class="num">1</span> Introdução</h2>
+        <p>
+          Oficinas, restaurantes e prestadores de serviço recebem pedidos de orçamento por formulários em seus sites. Na
+          prática, esses pedidos chegam por e-mail a quem está ocupado atendendo no balcão, na cozinha ou na obra, e a
+          resposta pode levar dias. O objetivo do projeto é garantir que todo pedido seja visto, priorizado e respondido
+          dentro de um prazo definido pelo próprio negócio, sem exigir que o dono mude de ferramenta.
+        </p>
+        <p>Os requisitos definidos foram:</p>
+        <ol class="reqs">
+          <li>funcionar com o formulário que o site já tem, inclusive sem JavaScript;</li>
+          <li>classificar o pedido de forma explicável, citando o trecho que motivou cada decisão;</li>
+          <li>avisar o dono no celular com uma resposta pronta para enviar pelo WhatsApp;</li>
+          <li>cobrar pedidos parados e medir tempo de resposta e taxa de fechamento;</li>
+          <li>não registrar dados pessoais em logs e autenticar toda comunicação entre os serviços.</li>
+        </ol>
+      </section>
+
+      <section class="col" aria-labelledby="s2">
+        <h2 id="s2"><span class="num">2</span> Arquitetura</h2>
+        <p>
+          O sistema tem três partes (Figura 1). A <b>API</b> recebe o pedido, aplica a classificação por regras, grava
+          em SQLite e emite o evento <code>lead.created</code>. O <b>fluxo no n8n</b> confere a assinatura do evento,
+          executa o agente de triagem e devolve a decisão à API, também assinada. O <b>painel</b> consome as rotas
+          autenticadas da API para listar, atualizar e medir os pedidos.
+        </p>
+      </section>
+
+      <figure class="wide" aria-labelledby="fig1">
+        <svg class="diagram" viewBox="0 0 960 230" role="img" aria-label="Diagrama da arquitetura">
+          <defs>
+            <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M0 0L10 5L0 10z" fill="#333" />
+            </marker>
+          </defs>
+          <g font-family="Source Sans 3, system-ui, sans-serif" font-size="14" fill="#1a1a1a" text-anchor="middle">
+            <rect x="10" y="70" width="150" height="70" fill="#fff" stroke="#333" />
+            <text x="85" y="100" font-weight="600">Site do negócio</text>
+            <text x="85" y="120" fill="#555" font-size="12">formulário HTML</text>
+
+            <rect x="250" y="50" width="200" height="110" fill="#fff" stroke="#333" stroke-width="1.6" />
+            <text x="350" y="80" font-weight="600">API do Balcão</text>
+            <text x="350" y="102" fill="#555" font-size="12">validação e classificação</text>
+            <text x="350" y="120" fill="#555" font-size="12">armazenamento (SQLite)</text>
+            <text x="350" y="138" fill="#555" font-size="12">painel e estatísticas</text>
+
+            <rect x="560" y="50" width="200" height="110" fill="#fff" stroke="#333" />
+            <text x="660" y="80" font-weight="600">Fluxo no n8n</text>
+            <text x="660" y="102" fill="#555" font-size="12">agente de triagem (Groq)</text>
+            <text x="660" y="120" fill="#555" font-size="12">Telegram e Gmail</text>
+            <text x="660" y="138" fill="#555" font-size="12">cobrança agendada</text>
+
+            <rect x="840" y="70" width="110" height="70" fill="#fff" stroke="#333" />
+            <text x="895" y="100" font-weight="600">Dono</text>
+            <text x="895" y="120" fill="#555" font-size="12">celular</text>
+          </g>
+          <g stroke="#333" stroke-width="1.3" fill="none" marker-end="url(#a)">
+            <path d="M160 105H245" />
+            <path d="M450 85H555" />
+            <path d="M560 125H455" />
+            <path d="M760 105H835" />
+            <path d="M660 160V200H350V165" />
+          </g>
+          <g font-family="JetBrains Mono, monospace" font-size="11" fill="#555" text-anchor="middle">
+            <text x="203" y="96">POST</text>
+            <text x="503" y="76">evento assinado</text>
+            <text x="503" y="143">decisão assinada</text>
+            <text x="505" y="218">consultas do agente (histórico, serviços)</text>
+          </g>
+        </svg>
+        <figcaption id="fig1">
+          <b>Figura 1.</b> Componentes e mensagens. As setas entre a API e o n8n são autenticadas com HMAC-SHA256 sobre
+          <code>timestamp.corpo</code>, com validade de 5 minutos.
+        </figcaption>
+      </figure>
+
+      <section class="col" aria-labelledby="s3">
+        <h2 id="s3"><span class="num">3</span> Classificação por regras</h2>
+        <p>
+          Antes de qualquer modelo de linguagem, a API classifica o pedido com regras determinísticas, rápidas e sem
+          custo (Tabela 1). O texto é normalizado (sem acentos, em minúsculas) apenas para a busca; as justificativas
+          citam o trecho original escrito pelo cliente. O serviço é o de maior número de palavras-chave encontradas, e
+          um serviço escolhido no formulário que não aparece na mensagem é apontado.
+        </p>
+        <table>
+          <caption>
+            <b>Tabela 1.</b>
+            Sinais extraídos de cada pedido.
+          </caption>
+          <thead>
+            <tr>
+              <th>Sinal</th>
+              <th>Critério</th>
+              <th>Exemplo</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Urgência alta</td>
+              <td>termos de pressa ou de problema que impede o uso</td>
+              <td><i>“não liga, preciso pra hoje”</i></td>
+            </tr>
+            <tr>
+              <td>Com prazo</td>
+              <td>prazo em dias, dia da semana ou data</td>
+              <td><i>“entrega em 2 dias úteis”, “até sexta”</i></td>
+            </tr>
+            <tr>
+              <td>Pedido grande</td>
+              <td>10 ou mais unidades, contrato ou lote</td>
+              <td><i>“lote mensal de 300 peças”</i></td>
+            </tr>
+            <tr>
+              <td>Não combina</td>
+              <td>nenhum serviço do negócio citado na mensagem</td>
+              <td><i>revisão de carro pedida a um restaurante</i></td>
+            </tr>
+            <tr>
+              <td>Suspeito</td>
+              <td>vários links, termos de propaganda</td>
+              <td><i>“renda extra com cripto”</i></td>
+            </tr>
+          </tbody>
+        </table>
+        <p>
+          O telefone é normalizado para E.164 com verificação de DDD e do nono dígito, o que permite gerar o link de
+          resposta no WhatsApp. Pedidos idênticos do mesmo telefone em menos de 10 minutos não geram novo registro, e
+          pedidos suspeitos são guardados sem notificar o dono.
+        </p>
+      </section>
+
+      <section class="col" aria-labelledby="s4">
+        <h2 id="s4"><span class="num">4</span> Agente de triagem no n8n</h2>
+        <p>
+          O nó de triagem é um <i>AI Agent</i> do n8n com o modelo Llama 3.3 (via Groq), duas ferramentas e saída
+          estruturada. As ferramentas são rotas da própria API: <code>historico_do_cliente</code> consulta pedidos
+          anteriores do mesmo telefone, e <code>servicos_do_negocio</code> retorna o que o negócio oferece. A saída
+          contém prioridade, justificativa, resumo e uma primeira mensagem ao cliente. A mensagem do cliente é passada
+          ao agente entre marcadores, com instrução para não seguir comandos contidos nela. Se o agente falhar, o fluxo
+          continua com a triagem por regras.
+        </p>
+        <p>
+          O arquivo do fluxo é gerado por um script versionado, e os nós de código são executados nos testes contra a
+          API, verificando as assinaturas nos dois sentidos.
+        </p>
+      </section>
+
+      <section class="wide demo-block" id="demonstracao" aria-labelledby="s5">
+        <div class="col">
+          <h2 id="s5"><span class="num">5</span> Demonstração</h2>
+          <p>
+            A API completa foi empacotada para rodar neste navegador, com dados fictícios em memória. Envie um pedido
+            pelo formulário (à esquerda); ele aparece no painel do dono (à direita) e o fluxo do n8n é executado em
+            seguida (Figura 2). Na demonstração, os nós de código do fluxo rodam com o mesmo JavaScript do arquivo
+            importado no n8n e as ferramentas do agente consultam a API; apenas a decisão do modelo é simulada por
+            regras equivalentes ao prompt.
+          </p>
+        </div>
+
+        <div class="demo">
+          <div class="pad" aria-label="Formulário de exemplo de um negócio">
+            <div class="pad-top">
+              <div class="client-tabs" role="group" aria-label="Escolha o negócio" id="client-tabs"></div>
+              <span class="pad-url" id="client-url">oficinapistao.com.br/orcamento</span>
+            </div>
+            <form id="client-form" class="pad-sheet" novalidate>
+              <h3 id="client-title">Peça seu orçamento</h3>
+              <p class="small" id="client-promise"></p>
+              <label
+                >Nome <input name="name" autocomplete="name" maxlength="80" /><span class="err" data-for="name"></span
+              ></label>
+              <label
+                >WhatsApp <input name="phone" inputmode="tel" autocomplete="tel" placeholder="(61) 99123-4567" /><span
+                  class="err"
+                  data-for="phone"
+                ></span
+              ></label>
+              <label
+                >E-mail <small>(opcional)</small> <input name="email" type="email" autocomplete="email" /><span
+                  class="err"
+                  data-for="email"
+                ></span
+              ></label>
+              <label
+                >Serviço
+                <select name="service" id="client-service"></select
+              ></label>
+              <label
+                >Mensagem <textarea name="message" maxlength="1500" rows="3"></textarea
+                ><span class="err" data-for="message"></span
+              ></label>
+              <div class="examples" id="client-examples"><span>Exemplos:</span></div>
+              <div class="hp" aria-hidden="true"><input name="website" tabindex="-1" autocomplete="off" /></div>
+              <button class="btn btn-ink send" type="submit">Enviar pedido</button>
+              <p class="ok" id="client-ok" role="status" hidden></p>
+            </form>
+          </div>
+
+          <div id="inbox"></div>
+
+          <figure class="n8n" id="n8n" aria-labelledby="n8n-title">
+            <div class="n8n-head">
+              <h3 id="n8n-title">Execução do fluxo no n8n</h3>
+              <button class="btn btn-small" type="button" id="n8n-sample">Executar com um pedido de exemplo</button>
+            </div>
+            <div class="n8n-canvas" id="n8n-canvas"></div>
+            <div class="n8n-run">
+              <ol class="steps" id="n8n-steps" aria-live="polite">
+                <li class="idle">Envie um pedido pelo formulário para ver cada etapa.</li>
+              </ol>
+              <div class="outputs">
+                <div>
+                  <p class="preview-label">Mensagem ao dono (Telegram)</p>
+                  <div class="bubble" id="n8n-telegram"><span class="idle">Aparece após a execução.</span></div>
+                </div>
+                <div>
+                  <p class="preview-label">Confirmação ao cliente (e-mail)</p>
+                  <div class="mail" id="n8n-mail">
+                    <span class="idle">Enviada só quando o cliente informa e-mail.</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <figcaption>
+              <b>Figura 2.</b> Fluxo do n8n desenhado a partir de <code>n8n/balcao-workflow.json</code>, com as etapas
+              executadas para o último pedido.
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="col" aria-labelledby="s6">
+        <h2 id="s6"><span class="num">6</span> Verificação</h2>
+        <p>
+          Os testes usam o executor nativo do Node (<code>node:test</code>) e rodam na integração contínua junto com a
+          verificação de tipos, a formatação e a checagem de que o fluxo do n8n está atualizado (Tabela 2). O mesmo
+          conjunto de testes de armazenamento é executado nas implementações em memória e em SQLite.
+        </p>
+        <table>
+          <caption>
+            <b>Tabela 2.</b>
+            Testes automatizados por área.
+          </caption>
+          <thead>
+            <tr>
+              <th>Área</th>
+              <th>O que é verificado</th>
+              <th class="n">Testes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Núcleo</td>
+              <td>telefone, classificação, validação do pedido e estatísticas</td>
+              <td class="n">24</td>
+            </tr>
+            <tr>
+              <td>HTTP</td>
+              <td>rotas, autenticação, CORS, limites, formulário sem JavaScript, logs sem dados pessoais</td>
+              <td class="n">23</td>
+            </tr>
+            <tr>
+              <td>Armazenamento</td>
+              <td>mesmo contrato em memória e em SQLite</td>
+              <td class="n">8</td>
+            </tr>
+            <tr>
+              <td>Fluxo do n8n</td>
+              <td>ligações do agente, assinaturas nos dois sentidos, falha do modelo</td>
+              <td class="n">7</td>
+            </tr>
+            <tr>
+              <td>Configuração</td>
+              <td>variáveis de ambiente e cadastro de negócios</td>
+              <td class="n">4</td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="2">Total</td>
+              <td class="n">66</td>
+            </tr>
+          </tfoot>
+        </table>
+      </section>
+
+      <section class="col" aria-labelledby="s7">
+        <h2 id="s7"><span class="num">7</span> Segurança e privacidade</h2>
+        <ul>
+          <li>Eventos e decisões entre API e n8n são assinados com HMAC-SHA256 e recusados após 5 minutos [1].</li>
+          <li>
+            Rotas do painel exigem token comparado em tempo constante; o formulário só é aceito de sites autorizados.
+          </li>
+          <li>
+            Limite de pedidos por IP, campo-armadilha contra robôs e redirecionamento restrito ao site do negócio.
+          </li>
+          <li>Logs registram apenas rota, status e tempo; o n8n não guarda execuções concluídas.</li>
+        </ul>
+      </section>
+
+      <section class="col" aria-labelledby="s8">
+        <h2 id="s8"><span class="num">8</span> Limitações e trabalhos futuros</h2>
+        <ul>
+          <li>O fluxo do n8n foi verificado por testes dos nós de código, mas não em uma instância de produção.</li>
+          <li>
+            Na demonstração, a decisão do modelo é simulada; a qualidade das decisões reais ainda não foi avaliada.
+          </li>
+          <li>O SQLite e o limite de requisições em memória atendem a uma única instância do servidor.</li>
+          <li>Como próximos passos: avaliar o agente com pedidos reais anotados e responder pelo WhatsApp Business.</li>
+        </ul>
+      </section>
+
+      <section class="col" id="apendice" aria-labelledby="sa">
+        <h2 id="sa">Apêndice A. Integração com um site existente</h2>
+        <p>
+          Basta apontar o formulário para a API com a chave pública do negócio. Com HTML puro, a API redireciona o
+          visitante para a página de agradecimento do próprio site.
+        </p>
+        <div class="code">
+          <div class="code-bar" role="group" aria-label="Formato do exemplo">
+            <button type="button" data-snippet="html" aria-pressed="true">HTML</button>
+            <button type="button" data-snippet="fetch" aria-pressed="false">JavaScript</button>
+            <button type="button" class="copy" id="copy">Copiar</button>
+          </div>
+          <pre id="snippet"></pre>
+        </div>
+      </section>
+
+      <section class="col refs" aria-labelledby="ref">
+        <h2 id="ref">Referências</h2>
+        <ol>
+          <li>
+            KRAWCZYK, H.; BELLARE, M.; CANETTI, R. <i>HMAC: Keyed-Hashing for Message Authentication</i>. RFC 2104,
+            1997. <a href="https://www.rfc-editor.org/rfc/rfc2104">rfc-editor.org/rfc/rfc2104</a>
+          </li>
+          <li>n8n. <i>Documentação</i>. <a href="https://docs.n8n.io/">docs.n8n.io</a></li>
+          <li>Node.js. <i>SQLite</i>. <a href="https://nodejs.org/api/sqlite.html">nodejs.org/api/sqlite.html</a></li>
+          <li>Groq. <i>Documentação da API</i>. <a href="https://console.groq.com/docs">console.groq.com/docs</a></li>
+        </ol>
+      </section>
+    </main>
+
+    <footer>
+      <div class="col">
+        Henrique Ribeiro Leonardo · código sob licença MIT ·
+        <a href="https://github.com/henriqueribeiroleonardo1/balcao">github.com/henriqueribeiroleonardo1/balcao</a>
+      </div>
+    </footer>
+
+    <script src="balcao.js"></script>
+    <script src="inbox.js"></script>
+    <script src="n8n-run.js"></script>
+    <script src="site.js"></script>
+  </body>
+</html>

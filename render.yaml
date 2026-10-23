@@ -1,0 +1,23 @@
+# Deploy grátis no Render: New > Blueprint e aponte para este repositório.
+# Atenção: no plano grátis o disco é apagado a cada deploy. Para um cliente de verdade, use docker-compose numa VPS.
+services:
+  - type: web
+    name: balcao
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: '22'
+      - key: NODE_ENV
+        value: production
+      - key: BALCAO_DATABASE
+        value: data/balcao.db
+      - key: BALCAO_ADMIN_TOKEN
+        generateValue: true
+      - key: BALCAO_N8N_SECRET
+        sync: false
+      - key: BALCAO_N8N_WEBHOOK_URL
+        sync: false

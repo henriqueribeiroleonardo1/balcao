@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Painel · Balcão</title>
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600&family=Source+Serif+4:ital@0;1&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="panel-page">
+    <header class="top">
+      <div class="wrap">
+        <a class="logo" href="./">balcão</a>
+        <nav><button class="btn" id="logout" type="button" hidden>Sair</button></nav>
+      </div>
+    </header>
+
+    <form class="login" id="login">
+      <h1 class="section-title">Painel</h1>
+      <p class="section-lead">Cole o token do painel (a variável BALCAO_ADMIN_TOKEN do servidor).</p>
+      <label for="token">Token</label>
+      <input id="token" type="password" autocomplete="current-password" required />
+      <p id="login-error" role="alert" style="color: var(--red)"></p>
+      <button class="btn btn-light" type="submit">Entrar</button>
+    </form>
+
+    <div id="inbox" hidden></div>
+
+    <script src="inbox.js"></script>
+    <script>
+      (() => {
+        const KEY = 'balcao-token';
+        const read = () => {
+          try {
+            return sessionStorage.getItem(KEY);
+          } catch {
+            return null;
+          }
+        };
+        const write = (value) => {
+          try {
+            value ? sessionStorage.setItem(KEY, value) : sessionStorage.removeItem(KEY);
+          } catch {}
+        };
+
+        let token = read();
+        const request = async (method, path, body) => {
+          const res = await fetch(path, {
+            method,
+            headers: {
+              authorization: `Bearer ${token}`,
+              ...(body !== undefined && { 'content-type': 'application/json' }),
+            },
+            ...(body !== undefined && { body: JSON.stringify(body) }),
+          });
+          return { status: res.status, data: await res.json() };
+        };
+
+        async function open() {
+          const root = document.getElementById('inbox');
+          try {
+            const inbox = BalcaoInbox.mount(root, { request, title: 'Pedidos' });
+            await inbox.refresh();
+            root.hidden = false;
+            document.getElementById('login').hidden = true;
+            document.getElementById('logout').hidden = false;
+            setInterval(() => inbox.refresh(), 60_000);
+          } catch (error) {
+            write(null);
+            root.hidden = true;
+            document.getElementById('login-error').textContent =
+              error.status === 401 ? 'Token incorreto.' : 'Não consegui falar com a API.';
+          }
+        }
+
+        document.getElementById('login').addEventListener('submit', (event) => {
+          event.preventDefault();
+          token = document.getElementById('token').value.trim();
+          write(token);
+          open();
+        });
+        document.getElementById('logout').addEventListener('click', () => {
+          write(null);
+          location.reload();
+        });
+        if (token) open();
+      })();
+    </script>
+  </body>
+</html>
